@@ -5,8 +5,12 @@ import {
   type IComponent,
   type WrappableInterface
 } from 'ag-grid-community';
-import type { ComponentType as SvelteComponentType } from 'svelte';
-import { SvelteComponent } from 'svelte';
+import { mount, unmount, flushSync } from 'svelte';
+import type {
+  ComponentType as SvelteComponentType,
+  // Only used for typing – not referenced at runtime
+  SvelteComponent
+} from 'svelte';
 
 // Called when a Svelte component is provided to override a default grid component
 export class SvelteFrameworkComponentWrapper
@@ -20,26 +24,36 @@ export class SvelteFrameworkComponentWrapper
 
 class NewSvelteComponent<P> implements IComponent<P>, WrappableInterface {
   private eParentElement!: HTMLElement;
-  private componentInstance!: SvelteComponent<{ params: P }>;
+  // Whatever `mount` returns (it’s an opaque instance to us)
+  private componentInstance: unknown | null = null;
   private methods: { [name: string]: (...args: P[]) => void } = {
     // Provide a default refresh method
     refresh: (params: P) => {
-      this.componentInstance.$set({ params });
+      // Simple strategy: tear down and re-mount with new props
+      if (this.componentInstance) {
+        unmount(this.componentInstance);
+      }
+      this.componentInstance = mount(this.SvelteComponent, {
+        target: this.eParentElement,
+        props: { params }
+      });
+      flushSync?.();
       return true;
     }
   };
 
-  constructor(private SvelteComponent: SvelteComponentType<SvelteComponent<{ params: P }>>) {}
+  constructor(private readonly SvelteComponent: SvelteComponentType) {}
 
   init(params: P): void {
     // Guaranteed to be called
     this.eParentElement = document.createElement('div');
     this.eParentElement.style.width = '100%';
     this.eParentElement.style.height = '100%';
-    this.componentInstance = new this.SvelteComponent({
+    this.componentInstance = mount(this.SvelteComponent, {
       target: this.eParentElement,
       props: { params }
     });
+    flushSync?.();
   }
 
   getGui(): HTMLElement {
@@ -47,7 +61,10 @@ class NewSvelteComponent<P> implements IComponent<P>, WrappableInterface {
   }
 
   destroy(): void {
-    this.componentInstance.$destroy();
+    if (this.componentInstance) {
+      unmount(this.componentInstance);
+      this.componentInstance = null;
+    }
   }
 
   hasMethod(name: string): boolean {
@@ -55,7 +72,7 @@ class NewSvelteComponent<P> implements IComponent<P>, WrappableInterface {
   }
 
   callMethod(name: string, args: IArguments): void {
-    this.methods[name]?.apply(this.componentInstance, [...args] as P[]);
+    this.methods[name]?.apply(this.componentInstance as never, [...args] as P[]);
   }
 
   addMethod(name: string, callback: (...args: unknown[]) => unknown): void {
@@ -66,12 +83,8 @@ class NewSvelteComponent<P> implements IComponent<P>, WrappableInterface {
 export class SvelteFrameworkOverrides extends VanillaFrameworkOverrides {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   override isFrameworkComponent(comp: any): boolean {
-    // HACK: In dev, the component is wrapped in a Svelte Proxy, obscuring the prototype chain.
-    // Instead, components are identified by their class name (internally set to Proxy<ComponentName>).
-    // In prod, it should be safe to directly check if they extend SvelteComponent.
-    return (
-      comp?.prototype?.constructor?.name?.startsWith('Proxy<') ||
-      Object.prototype.isPrototypeOf.call(SvelteComponent, comp)
-    );
+    // In Svelte 5 compiled output, a component is just a plain function.
+    // A simple, cheap heuristic is therefore sufficient.
+    return typeof comp === 'function';
   }
 }

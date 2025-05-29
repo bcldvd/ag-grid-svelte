@@ -20,7 +20,7 @@
     "prettier": "^2.8.8",
     "prettier-plugin-svelte": "^2.10.1",
     "sass": "^1.62.1",
-    "svelte": "^4.0.0",
+    "svelte": "^5.33.9",
     "svelte-check": "^3.4.3",
     "svelte-preprocess": "^5.1.4",
     "svelte2tsx": "^0.7.8",
@@ -30,7 +30,7 @@
   },
   "peerDependencies": {
     "ag-grid-community": "^28 || ^29 || ^30 || ^31 || ^32",
-    "svelte": "^3 || ^4"
+    "svelte": "^5.33.9"
   },
   "scripts": {
     "dev": "vite dev",
