@@ -345,6 +345,9 @@
 
   let eGui: HTMLDivElement;
   let ready = false;
+  let resizeObserver: ResizeObserver | undefined;
+  let lastClientWidth = -1;
+  let lastClientHeight = -1;
 
   onMount(() => {
     const _onGridReady = gridOptions.onGridReady;
@@ -368,7 +371,29 @@
 
     const grid = createGrid(eGui, gridOptions, gridParams);
 
+    const updateGridLayout = () => {
+      if (!api || !ready) return;
+
+      const nextClientWidth = eGui.clientWidth;
+      const nextClientHeight = eGui.clientHeight;
+
+      if (nextClientWidth === lastClientWidth && nextClientHeight === lastClientHeight) return;
+
+      lastClientWidth = nextClientWidth;
+      lastClientHeight = nextClientHeight;
+      (api as unknown as { doLayout?: () => void }).doLayout?.();
+    };
+
+    lastClientWidth = eGui.clientWidth;
+    lastClientHeight = eGui.clientHeight;
+    if (typeof ResizeObserver !== 'undefined') {
+      resizeObserver = new ResizeObserver(updateGridLayout);
+      resizeObserver.observe(eGui);
+    }
+
     return () => {
+      resizeObserver?.disconnect();
+      resizeObserver = undefined;
       grid.destroy();
       ready = false;
     };
